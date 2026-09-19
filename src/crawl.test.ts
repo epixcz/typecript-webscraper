@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getFirstParagraphFromHTML, getHeadingFromHTML, normalizeURL } from "./crawl";
+import { getFirstParagraphFromHTML, getHeadingFromHTML, getURLsFromHTML, getImagesFromHTML, normalizeURL } from "./crawl";
 
 describe("getFirstParagraphFromHTML", () => {
   it("returns the text content of the first paragraph", () => {
@@ -151,5 +151,83 @@ describe("normalizeURL", () => {
     expect(normalizeURL("https://www.boot.dev/index.html")).toBe(
       "www.boot.dev/index.html",
     );
+  });
+});
+
+describe("getURLsFromHTML", () => {
+  const baseURL = "https://crawler-test.com";
+
+  it("converts root-relative URLs to absolute URLs", () => {
+    expect(getURLsFromHTML('<html><body><a href="/path/one"><span>Link</span></a></body></html>', baseURL))
+      .toEqual(["https://crawler-test.com/path/one"]);
+  });
+
+  it("resolves relative paths and protocol-relative URLs", () => {
+    expect(getURLsFromHTML('<a href="images/logo.png"><span>Link</span></a><a href="//cdn.example.com/logo.png"><span>Link</span></a>', baseURL))
+      .toEqual(["https://crawler-test.com/images/logo.png", "https://cdn.example.com/logo.png"]);
+  });
+
+  it("finds all matching tags in document order and preserves duplicates", () => {
+    const html = '<html><body><a href="/one"><span>Link</span></a><div><a href="https://other.com/two/"><span>Link</span></a></div><a href="/one"><span>Link</span></a></body></html>';
+    expect(getURLsFromHTML(html, baseURL)).toEqual([
+      "https://crawler-test.com/one", "https://other.com/two/", "https://crawler-test.com/one",
+    ]);
+  });
+
+  it("preserves the scheme, path case, trailing slash, query, and fragment", () => {
+    expect(getURLsFromHTML('<a href="http://other.com/Path/?page=1&amp;size=2#section"><span>Link</span></a>', baseURL))
+      .toEqual(["http://other.com/Path/?page=1&size=2#section"]);
+  });
+
+  it("skips missing and empty attributes while retaining valid URLs", () => {
+    expect(getURLsFromHTML('<a><a href=""><a href="/valid"><span>Link</span></a>', baseURL))
+      .toEqual(["https://crawler-test.com/valid"]);
+  });
+
+  it("returns an empty list when no matching tags exist", () => {
+    expect(getURLsFromHTML("<p>No URLs here</p>", baseURL)).toEqual([]);
+  });
+
+  it("throws for an invalid URL", () => {
+    expect(() => getURLsFromHTML('<a href="http://["><span>Link</span></a>', baseURL)).toThrow(TypeError);
+  });
+});
+
+describe("getImagesFromHTML", () => {
+  const baseURL = "https://crawler-test.com";
+
+  it("converts root-relative URLs to absolute URLs", () => {
+    expect(getImagesFromHTML('<html><body><img src="/path/one"></body></html>', baseURL))
+      .toEqual(["https://crawler-test.com/path/one"]);
+  });
+
+  it("resolves relative paths and protocol-relative URLs", () => {
+    expect(getImagesFromHTML('<img src="images/logo.png"><img src="//cdn.example.com/logo.png">', baseURL))
+      .toEqual(["https://crawler-test.com/images/logo.png", "https://cdn.example.com/logo.png"]);
+  });
+
+  it("finds all matching tags in document order and preserves duplicates", () => {
+    const html = '<html><body><img src="/one"><div><img src="https://other.com/two/"></div><img src="/one"></body></html>';
+    expect(getImagesFromHTML(html, baseURL)).toEqual([
+      "https://crawler-test.com/one", "https://other.com/two/", "https://crawler-test.com/one",
+    ]);
+  });
+
+  it("preserves the scheme, path case, trailing slash, query, and fragment", () => {
+    expect(getImagesFromHTML('<img src="http://other.com/Path/?page=1&amp;size=2#section">', baseURL))
+      .toEqual(["http://other.com/Path/?page=1&size=2#section"]);
+  });
+
+  it("skips missing and empty attributes while retaining valid URLs", () => {
+    expect(getImagesFromHTML('<img><img src=""><img src="/valid">', baseURL))
+      .toEqual(["https://crawler-test.com/valid"]);
+  });
+
+  it("returns an empty list when no matching tags exist", () => {
+    expect(getImagesFromHTML("<p>No URLs here</p>", baseURL)).toEqual([]);
+  });
+
+  it("throws for an invalid URL", () => {
+    expect(() => getImagesFromHTML('<img src="http://[">', baseURL)).toThrow(TypeError);
   });
 });
