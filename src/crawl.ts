@@ -1,5 +1,23 @@
 import { JSDOM } from "jsdom";
 
+export interface ExtractedPageData {
+  url: string;
+  heading: string;
+  first_paragraph: string;
+  outgoing_links: string[];
+  image_urls: string[];
+}
+
+export function extractPageData(html: string, pageURL: string): ExtractedPageData {
+  return {
+    url: pageURL,
+    heading: getHeadingFromHTML(html),
+    first_paragraph: getFirstParagraphFromHTML(html),
+    outgoing_links: getURLsFromHTML(html, pageURL),
+    image_urls: getImagesFromHTML(html, pageURL),
+  };
+}
+
 export function getURLsFromHTML(html: string, baseURL: string): string[] {
   const document = new JSDOM(html).window.document;
   const urls: string[] = [];

@@ -1,5 +1,61 @@
 import { describe, expect, it } from "vitest";
-import { getFirstParagraphFromHTML, getHeadingFromHTML, getURLsFromHTML, getImagesFromHTML, normalizeURL } from "./crawl";
+import { extractPageData, getFirstParagraphFromHTML, getHeadingFromHTML, getURLsFromHTML, getImagesFromHTML, normalizeURL } from "./crawl";
+
+describe("extractPageData", () => {
+  it("returns empty fields when the page has no content", () => {
+    expect(extractPageData("", "https://crawler-test.com/empty")).toEqual({
+      url: "https://crawler-test.com/empty",
+      heading: "",
+      first_paragraph: "",
+      outgoing_links: [],
+      image_urls: [],
+    });
+  });
+
+  it("uses the full page URL and retains the existing extraction behavior", () => {
+    const html = `<html><body>
+      <h2>  Fallback <em>title</em>  </h2>
+      <p>First <strong>paragraph</strong>.</p><p>Second paragraph.</p>
+      <a>No href</a><a href="">Empty href</a>
+      <a href="next?mode=full#details">Next</a>
+      <a href="https://other.com/Page/">External</a>
+      <img alt="No source"><img src="">
+      <img src="../images/photo.jpg"><img src="/logo.png">
+    </body></html>`;
+
+    expect(extractPageData(html, "https://crawler-test.com/articles/current?view=1#top"))
+      .toEqual({
+        url: "https://crawler-test.com/articles/current?view=1#top",
+        heading: "Fallback title",
+        first_paragraph: "First paragraph.",
+        outgoing_links: [
+          "https://crawler-test.com/articles/next?mode=full#details",
+          "https://other.com/Page/",
+        ],
+        image_urls: [
+          "https://crawler-test.com/images/photo.jpg",
+          "https://crawler-test.com/logo.png",
+        ],
+      });
+  });
+
+  it("collects all page data", () => {
+    const html = `<html><body>
+      <h1>Test Title</h1>
+      <p>This is the first paragraph.</p>
+      <a href="/link1">Link 1</a>
+      <img src="/image1.jpg" alt="Image 1">
+    </body></html>`;
+
+    expect(extractPageData(html, "https://crawler-test.com")).toEqual({
+      url: "https://crawler-test.com",
+      heading: "Test Title",
+      first_paragraph: "This is the first paragraph.",
+      outgoing_links: ["https://crawler-test.com/link1"],
+      image_urls: ["https://crawler-test.com/image1.jpg"],
+    });
+  });
+});
 
 describe("getFirstParagraphFromHTML", () => {
   it("returns the text content of the first paragraph", () => {
