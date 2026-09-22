@@ -1,5 +1,29 @@
 import { JSDOM } from "jsdom";
 
+export async function getHTML(url: string): Promise<string | undefined> {
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "BootCrawler/1.0" },
+    });
+
+    if (response.status >= 400) {
+      console.error(`Error fetching ${url}: HTTP ${response.status}`);
+      return;
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (contentType?.split(";")[0]?.trim().toLowerCase() !== "text/html") {
+      console.error(`Error fetching ${url}: expected text/html, received ${contentType ?? "no content-type"}`);
+      return;
+    }
+
+    return await response.text();
+  } catch (error) {
+    console.error(`Error fetching ${url}:`, error);
+    return;
+  }
+}
+
 export interface ExtractedPageData {
   url: string;
   heading: string;
