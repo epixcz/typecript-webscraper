@@ -1,5 +1,34 @@
 import { JSDOM } from "jsdom";
 
+export async function crawlPage(
+  baseURL: string,
+  currentURL: string = baseURL,
+  pages: Record<string, number> = {},
+): Promise<Record<string, number>> {
+  if (new URL(currentURL).hostname !== new URL(baseURL).hostname) {
+    return pages;
+  }
+
+  const normalizedURL = normalizeURL(currentURL);
+  if (Object.hasOwn(pages, normalizedURL)) {
+    pages[normalizedURL] += 1;
+    return pages;
+  }
+
+  pages[normalizedURL] = 1;
+  console.log(`Crawling ${currentURL}`);
+  const html = await getHTML(currentURL);
+  if (html === undefined) {
+    return pages;
+  }
+
+  for (const url of getURLsFromHTML(html, currentURL)) {
+    await crawlPage(baseURL, url, pages);
+  }
+
+  return pages;
+}
+
 export async function getHTML(url: string): Promise<string | undefined> {
   try {
     const response = await fetch(url, {
