@@ -7,7 +7,7 @@ afterEach(() => {
 });
 
 describe("crawlSiteAsync", () => {
-  it("counts repeated links and cycles, resolves page-relative links, and fetches each internal page once", async () => {
+  it("skips repeated links and cycles, resolves page-relative links, and fetches each internal page once", async () => {
     const bodies: Record<string, string> = {
       "https://example.com/shop/": '<a href="products/one">One</a><a href="products/one#details">One again</a><a href="https://other.com/">External</a>',
       "https://example.com/shop/products/one": '<a href="/shop/">Home</a><a href="two">Two</a>',
@@ -21,8 +21,8 @@ describe("crawlSiteAsync", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
 
     expect(await crawlSiteAsync("https://example.com/shop/")).toEqual({
-      "example.com/shop": 3,
-      "example.com/shop/products/one": 2,
+      "example.com/shop": 1,
+      "example.com/shop/products/one": 1,
       "example.com/shop/products/two": 1,
     });
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(Object.keys(bodies));
@@ -43,7 +43,7 @@ describe("crawlSiteAsync", () => {
   });
 });
 
-it.each([1, 3])("limits fetches including body reads to %i while counting shared links once per occurrence", async (maxConcurrency) => {
+it.each([1, 3])("limits fetches including body reads to %i while visiting shared pages once", async (maxConcurrency) => {
   let active = 0;
   let peak = 0;
   const fetchMock = vi.fn(async (url: string) => {
@@ -65,8 +65,8 @@ it.each([1, 3])("limits fetches including body reads to %i while counting shared
   vi.stubGlobal("fetch", fetchMock);
   vi.spyOn(console, "log").mockImplementation(() => {});
   expect(await crawlSiteAsync("https://example.com", maxConcurrency)).toEqual({
-    "example.com": 2, "example.com/a": 1, "example.com/b": 1,
-    "example.com/c": 1, "example.com/shared": 3,
+    "example.com": 1, "example.com/a": 1, "example.com/b": 1,
+    "example.com/c": 1, "example.com/shared": 1,
   });
   expect(peak).toBe(maxConcurrency);
   expect(active).toBe(0);
@@ -94,4 +94,26 @@ it.each(["network", "body", "content-type", "missing content-type"])("continues 
     "example.com": 1, "example.com/bad": 1, "example.com/ok": 1,
   });
   expect(error).toHaveBeenCalledTimes(1);
+});
+
+it.each([1, 3, 10])("fetches at most %i unique pages and finishes admitted tasks before returning", async (maxPages) => {
+  let completed = 0;
+  const fetchMock = vi.fn(async () => ({
+    status: 200,
+    headers: new Headers({ "Content-Type": "text/html" }),
+    text: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      completed++;
+      return '<a href="/">Self</a><a href="https://other.com">External</a>' +
+        Array.from({ length: 20 }, (_, i) => `<a href="/page${i}">Page</a>`).join("");
+    },
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  const pages = await crawlSiteAsync("https://example.com", 3, maxPages);
+  expect(Object.keys(pages)).toHaveLength(maxPages);
+  expect(Object.values(pages).every((count) => count === 1)).toBe(true);
+  expect(fetchMock).toHaveBeenCalledTimes(maxPages);
+  expect(completed).toBe(maxPages);
+  expect(log.mock.calls.filter(([message]) => message === "Reached maximum number of pages to crawl.")).toHaveLength(1);
 });
