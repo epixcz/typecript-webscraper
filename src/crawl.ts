@@ -3,7 +3,7 @@ import pLimit from "p-limit";
 
 export class ConcurrentCrawler {
   private baseURL: string;
-  private pages: Record<string, number>;
+  private pages: Record<string, ExtractedPageData>;
   private limit: ReturnType<typeof pLimit>;
 
   private maxPages: number;
@@ -33,7 +33,6 @@ export class ConcurrentCrawler {
       return false;
     }
     this.visited.add(normalizedURL);
-    this.pages[normalizedURL] = 1;
     return true;
   }
 
@@ -66,15 +65,17 @@ export class ConcurrentCrawler {
     if (new URL(currentURL).hostname !== new URL(this.baseURL).hostname) {
       return;
     }
-    if (!this.addPageVisit(normalizeURL(currentURL))) {
+    const normalizedURL = normalizeURL(currentURL);
+    if (!this.addPageVisit(normalizedURL)) {
       return;
     }
     const html = await this.getHTML(currentURL);
-    if (!html || this.shouldStop) return;
+    if (!html) return;
 
-    const nextURLs = getURLsFromHTML(html, currentURL);
+    const data = extractPageData(html, currentURL);
+    this.pages[normalizedURL] = data;
     const tasks: Promise<void>[] = [];
-    for (const nextURL of nextURLs) {
+    for (const nextURL of data.outgoing_links) {
       if (this.shouldStop) break;
       tasks.push(this.createCrawlTask(nextURL));
     }
@@ -89,7 +90,7 @@ export class ConcurrentCrawler {
     return task;
   }
 
-  async crawl(): Promise<Record<string, number>> {
+  async crawl(): Promise<Record<string, ExtractedPageData>> {
     await this.createCrawlTask(this.baseURL);
     while (this.allTasks.size > 0) {
       await Promise.all(this.allTasks);
@@ -102,7 +103,7 @@ export async function crawlSiteAsync(
   baseURL: string,
   maxConcurrency: number = 1,
   maxPages: number = Infinity,
-): Promise<Record<string, number>> {
+): Promise<Record<string, ExtractedPageData>> {
   const crawler = new ConcurrentCrawler(baseURL, maxConcurrency, maxPages);
   return await crawler.crawl();
 }

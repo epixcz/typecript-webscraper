@@ -19,9 +19,14 @@ async function main() {
 
   console.log(`Starting crawler at ${baseURL}`);
   const pages = await crawlSiteAsync(baseURL, maxConcurrency, maxPages);
+  console.log("Finished crawling.");
+  const firstPage = Object.values(pages)[0];
+  if (firstPage) {
+    console.log(`First page record: ${firstPage["url"]} - ${firstPage["heading"]}`);
+  }
   console.log("Crawl report:");
-  for (const [url, count] of Object.entries(pages)) {
-    console.log(`${url}: ${count}`);
+  for (const [url, data] of Object.entries(pages)) {
+    console.log(`${url}: ${data.heading}`);
   }
 }
 
